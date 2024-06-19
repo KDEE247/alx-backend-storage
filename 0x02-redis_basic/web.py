@@ -1,36 +1,47 @@
 #!/usr/bin/env python3
-"""
-web cache and tracker
-"""
+"""web"""
 import requests
 import redis
 from functools import wraps
 
-store = redis.Redis()
+# Connect to Redis
+redis_client = redis.Redis()
 
 
-def count_url_access(method):
-    """ Decorator counting how many times
-    a URL is accessed """
-    @wraps(method)
-    def wrapper(url):
-        cached_key = "cached:" + url
-        cached_data = store.get(cached_key)
-        if cached_data:
-            return cached_data.decode("utf-8")
+def cache_with_expiry(expiration_time):
+    """x"""
+    def decorator(func):
+        """"""
+        @wraps(func)
+        def wrapper(url):
+            """"""
+            # Create a key for counting accesses
+            count_key = f"count:{url}"
 
-        count_key = "count:" + url
-        html = method(url)
+            # Check if the URL is in cache
+            cached_result = redis_client.get(url)
+            if cached_result:
+                # Increment access count
+                redis_client.incr(count_key)
+                return cached_result.decode('utf-8')
 
-        store.incr(count_key)
-        store.set(cached_key, html)
-        store.expire(cached_key, 10)
-        return html
-    return wrapper
+            # Make the request
+            response = func(url)
+
+            # Cache the result with expiration
+            redis_client.setex(url, expiration_time, response)
+
+            # Increment access count
+            redis_client.incr(count_key)
+
+            return response
+        return wrapper
+    return decorator
 
 
-@count_url_access
+@cache_with_expiry(expiration_time=10)
 def get_page(url: str) -> str:
-    """ Returns HTML content of a url """
-    res = requests.get(url)
-    return res.text
+    """track how many times a particular
+       URL was accessed in the key"""
+    response = requests.get(url)
+    return response.text
